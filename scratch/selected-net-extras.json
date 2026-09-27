@@ -1,0 +1,55 @@
+{
+  "netExtrasCount": 13,
+  "selectedCount": 7,
+  "selected": [
+    {
+      "id": "e4c6fc81-fcab-40f5-9714-be3f03554822",
+      "month": "12/2025",
+      "date": "2025-12-09",
+      "amount": 8000,
+      "name": "Moch. Ilham Adeli"
+    },
+    {
+      "id": "fb3f1ada-bfad-44c1-b0d0-03a08842aae9",
+      "month": "1/2026",
+      "date": "2026-01-09",
+      "amount": 8000,
+      "name": "Moch. Ilham Adeli"
+    },
+    {
+      "id": "10e0ecde-7076-425c-beee-485faf3912f1",
+      "month": "2/2026",
+      "date": "2026-02-09",
+      "amount": 8000,
+      "name": "Moch. Ilham Adeli"
+    },
+    {
+      "id": "45e3d8d8-081e-4b6a-ae15-ab9c4391e4f6",
+      "month": "3/2026",
+      "date": "2026-03-09",
+      "amount": 8000,
+      "name": "Moch. Ilham Adeli"
+    },
+    {
+      "id": "fddfe99c-4170-465a-add6-da426b465ad1",
+      "month": "4/2026",
+      "date": "2026-04-09",
+      "amount": 8000,
+      "name": "Moch. Ilham Adeli"
+    },
+    {
+      "id": "cc051899-2261-4ffd-87df-e62b3ad09d75",
+      "month": "12/2025",
+      "date": "2025-12-09",
+      "amount": 8000,
+      "name": "M. Khikam Muzadi"
+    },
+    {
+      "id": "b2011b25-9c34-438c-bca3-7648895137cd",
+      "month": "1/2026",
+      "date": "2026-01-09",
+      "amount": 8000,
+      "name": "M. Khikam Muzadi"
+    }
+  ]
+}

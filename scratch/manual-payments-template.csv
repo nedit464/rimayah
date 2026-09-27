@@ -1,0 +1,7 @@
+memberBillingId,billingId,memberId,amount,date,description,verifiedBy
+# Option A: provide `memberBillingId` to target a specific MemberBilling row
+# Option B: provide `billingId` + `memberId` to target the member's billing for that billing
+# `date` format: YYYY-MM-DD
+# Example rows:
+cmpdxxxxxxxx, , ,8000,2026-05-10,Bayar iuran Mei,Admin
+ ,cmpdprj7uwffix,cmpmbr12345,8000,2026-05-10,Bayar iuran Mei,Admin

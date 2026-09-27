@@ -1,0 +1,263 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────
+// ADMIN
+// ─────────────────────────────────────────
+
+model Admin {
+  id           String         @id @default(cuid())
+  username     String         @unique
+  passwordHash String
+  createdAt    DateTime       @default(now())
+  sessions     AdminSession[]
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  adminId   String
+  token     String   @unique @default(cuid())
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  admin     Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([adminId])
+}
+
+// ─────────────────────────────────────────
+// MEMBERS
+// ─────────────────────────────────────────
+
+enum Role {
+  MUASSIS
+  ANGGOTA
+}
+
+model Member {
+  id          String       @id @default(cuid())
+  name        String
+  joinDate    DateTime
+  status      MemberStatus @default(AKTIF)
+  role        Role         @default(ANGGOTA)
+  monthlyFee  Decimal      @default(8000) @db.Decimal(15, 2)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  memberBillings MemberBilling[]
+
+  @@index([status])
+  @@index([name])
+  @@index([role])
+}
+
+enum MemberStatus {
+  AKTIF
+  NONAKTIF
+}
+
+// ─────────────────────────────────────────
+// FUNDS
+// ─────────────────────────────────────────
+
+model Fund {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  balance     Decimal  @default(0) @db.Decimal(15, 2)
+  color       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  incomeTransactions  IncomeTransaction[]
+  expenseTransactions ExpenseTransaction[]
+  billings            Billing[]
+}
+
+// ─────────────────────────────────────────
+// BILLINGS
+// ─────────────────────────────────────────
+
+model Billing {
+  id          String      @id @default(cuid())
+  title       String
+  type        BillingType
+  amount      Decimal     @db.Decimal(15, 2)
+  dueDate     DateTime
+  month       Int?
+  year        Int?
+  fundId      String
+  description String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  fund           Fund            @relation(fields: [fundId], references: [id])
+  memberBillings MemberBilling[]
+
+  @@index([type])
+  @@index([month, year])
+  @@index([fundId])
+}
+
+enum BillingType {
+  MONTHLY_KAS
+  CUSTOM
+}
+
+// ─────────────────────────────────────────
+// MEMBER BILLINGS
+// ─────────────────────────────────────────
+
+model MemberBilling {
+  id         String        @id @default(cuid())
+  memberId   String
+  billingId  String
+  status     PaymentStatus @default(BELUM_BAYAR)
+  paidAt     DateTime?
+  verifiedAt DateTime?
+  notes      String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  member            Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  billing           Billing            @relation(fields: [billingId], references: [id], onDelete: Cascade)
+  incomeTransaction IncomeTransaction?
+  paymentRequests   PaymentRequest[]
+
+  @@unique([memberId, billingId])
+  @@index([status])
+  @@index([memberId])
+  @@index([billingId])
+}
+
+enum PaymentStatus {
+  BELUM_BAYAR
+  MENUNGGU_VERIFIKASI
+  MENUNGGAK
+  LUNAS
+}
+
+// ─────────────────────────────────────────
+// INCOME TRANSACTIONS
+// ─────────────────────────────────────────
+
+model IncomeTransaction {
+  id              String   @id @default(cuid())
+  fundId          String
+  memberBillingId String?  @unique
+  title           String
+  amount          Decimal  @db.Decimal(15, 2)
+  date            DateTime
+  description     String?
+  createdAt       DateTime @default(now())
+
+  fund          Fund           @relation(fields: [fundId], references: [id])
+  memberBilling MemberBilling? @relation(fields: [memberBillingId], references: [id])
+
+  @@index([fundId])
+  @@index([date])
+}
+
+// ─────────────────────────────────────────
+// EXPENSE TRANSACTIONS
+// ─────────────────────────────────────────
+
+model ExpenseTransaction {
+  id          String          @id @default(cuid())
+  fundId      String
+  title       String
+  amount      Decimal         @db.Decimal(15, 2)
+  category    ExpenseCategory
+  description String?
+  date        DateTime
+  createdAt   DateTime        @default(now())
+
+  fund Fund @relation(fields: [fundId], references: [id])
+
+  @@index([fundId])
+  @@index([category])
+  @@index([date])
+}
+
+enum ExpenseCategory {
+  PERALATAN
+  KONSUMSI
+  EVENT
+  OPERASIONAL
+  TRANSPORTASI
+  LAINNYA
+}
+
+// ─────────────────────────────────────────
+// ANNOUNCEMENTS
+// ─────────────────────────────────────────
+
+model Announcement {
+  id          String           @id @default(cuid())
+  title       String
+  content     String           @db.Text
+  type        AnnouncementType
+  isPinned    Boolean          @default(false)
+  publishedAt DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  isVisible   Boolean          @default(true)
+}
+
+enum AnnouncementType {
+  FINANCE_NOTICE
+  PAYMENT_REMINDER
+  ORGANIZATION_UPDATE
+}
+
+// ─────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────
+
+model Settings {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
+
+// ─────────────────────────────────────────
+// PAYMENT REQUESTS
+// ─────────────────────────────────────────
+
+model PaymentRequest {
+  id              String        @id @default(cuid())
+  memberBillingId String
+  amountOriginal  Decimal       @db.Decimal(15, 2)
+  amountUnique    Int
+  amountTotal     Decimal       @db.Decimal(15, 2)
+  paymentMethod   PaymentMethod
+  bankCode        String        // e.g. "BSI", "JAGO", "QRIS"
+  status          RequestStatus @default(PENDING)
+  expiredAt       DateTime
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  memberBilling   MemberBilling @relation(fields: [memberBillingId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([amountTotal])
+  @@index([expiredAt])
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  QRIS
+}
+
+enum RequestStatus {
+  PENDING
+  SUCCESS
+  EXPIRED
+  FAILED
+}
+
