@@ -15,7 +15,8 @@ export const CreateCustomBillingSchema = z.object({
   dueDate: z.coerce.date(),
   fundId: z.string().min(1, 'Dana harus dipilih'),
   description: z.string().optional(),
-  memberIds: z.array(z.string()).optional()
+  memberIds: z.array(z.string()).optional(),
+  roles: z.array(z.enum(['MUASSIS', 'ANGGOTA'])).optional()
 })
 
 export const UpdateBillingSchema = z.object({
@@ -23,8 +24,10 @@ export const UpdateBillingSchema = z.object({
   amount: z.number().positive().optional(),
   dueDate: z.coerce.date().optional(),
   fundId: z.string().min(1).optional(),
-  description: z.string().optional()
+  description: z.string().optional(),
+  roles: z.array(z.enum(['MUASSIS', 'ANGGOTA'])).optional()
 })
 
 export type GenerateMonthlyBillingInput = z.infer<typeof GenerateMonthlyBillingSchema>
 export type CreateCustomBillingInput = z.infer<typeof CreateCustomBillingSchema>
+export type UpdateBillingInput = z.infer<typeof UpdateBillingSchema>

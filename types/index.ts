@@ -5,6 +5,7 @@ export interface MemberWithBillings {
   name: string
   joinDate: Date
   status: 'AKTIF' | 'NONAKTIF'
+  role: 'MUASSIS' | 'ANGGOTA'
   memberBillings: MemberBillingWithBilling[]
 }
 

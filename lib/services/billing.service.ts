@@ -70,7 +70,8 @@ export async function createCustomBilling(
   dueDate: Date,
   fundId: string,
   description?: string,
-  memberIds?: string[]
+  memberIds?: string[],
+  roles?: ('MUASSIS' | 'ANGGOTA')[]
 ) {
   return prisma.$transaction(async (tx) => {
     const billing = await tx.billing.create({
@@ -84,13 +85,17 @@ export async function createCustomBilling(
       }
     })
 
-    // If specific members, use those; otherwise all active members
+    // If specific members, use those; otherwise active members (optionally filtered by roles)
     let targetMemberIds: string[]
     if (memberIds && memberIds.length > 0) {
       targetMemberIds = memberIds
     } else {
+      const activeMembersWhere: any = { status: 'AKTIF' }
+      if (roles && roles.length > 0) {
+        activeMembersWhere.role = { in: roles }
+      }
       const activeMembers = await tx.member.findMany({
-        where: { status: 'AKTIF' },
+        where: activeMembersWhere,
         select: { id: true }
       })
       targetMemberIds = activeMembers.map(m => m.id)
@@ -111,39 +116,81 @@ export async function createCustomBilling(
 }
 
 export async function getAllBillings() {
-  return prisma.billing.findMany({
+  const billings = await prisma.billing.findMany({
     orderBy: { createdAt: 'desc' },
     include: {
       fund: { select: { id: true, name: true } },
       memberBillings: {
-        select: { status: true }
+        select: {
+          id: true,
+          status: true,
+          member: {
+            select: { id: true, name: true, role: true }
+          }
+        }
       }
+    }
+  })
+
+  return billings.map(b => {
+    const roles = Array.from(new Set(b.memberBillings.map(mb => mb.member?.role).filter(Boolean)))
+    return {
+      ...b,
+      roles
     }
   })
 }
 
 export async function getMonthlyBillings() {
-  return prisma.billing.findMany({
+  const billings = await prisma.billing.findMany({
     where: { type: 'MONTHLY_KAS' },
     orderBy: [{ year: 'desc' }, { month: 'desc' }],
     include: {
-      fund: { select: { name: true } },
+      fund: { select: { id: true, name: true } },
       memberBillings: {
-        select: { status: true }
+        select: {
+          id: true,
+          status: true,
+          member: {
+            select: { id: true, name: true, role: true }
+          }
+        }
       }
+    }
+  })
+
+  return billings.map(b => {
+    const roles = Array.from(new Set(b.memberBillings.map(mb => mb.member?.role).filter(Boolean)))
+    return {
+      ...b,
+      roles
     }
   })
 }
 
 export async function getCustomBillings() {
-  return prisma.billing.findMany({
+  const billings = await prisma.billing.findMany({
     where: { type: 'CUSTOM' },
     orderBy: { createdAt: 'desc' },
     include: {
-      fund: { select: { name: true } },
+      fund: { select: { id: true, name: true } },
       memberBillings: {
-        select: { status: true }
+        select: {
+          id: true,
+          status: true,
+          member: {
+            select: { id: true, name: true, role: true }
+          }
+        }
       }
+    }
+  })
+
+  return billings.map(b => {
+    const roles = Array.from(new Set(b.memberBillings.map(mb => mb.member?.role).filter(Boolean)))
+    return {
+      ...b,
+      roles
     }
   })
 }
@@ -159,15 +206,86 @@ export async function checkAndMarkOverdue() {
   })
 }
 
-export async function updateBilling(id: string, data: { title?: string; amount?: number; dueDate?: Date; fundId?: string; description?: string }) {
-  const updateData: any = {}
-  if (data.title !== undefined) updateData.title = data.title
-  if (data.amount !== undefined) updateData.amount = data.amount
-  if (data.dueDate !== undefined) updateData.dueDate = data.dueDate
-  if (data.fundId !== undefined) updateData.fundId = data.fundId
-  if (data.description !== undefined) updateData.description = data.description
+export async function updateBilling(id: string, data: {
+  title?: string
+  amount?: number
+  dueDate?: Date
+  fundId?: string
+  description?: string
+  roles?: ('MUASSIS' | 'ANGGOTA')[]
+}) {
+  return prisma.$transaction(async (tx) => {
+    const updateData: any = {}
+    if (data.title !== undefined) updateData.title = data.title
+    if (data.amount !== undefined) updateData.amount = data.amount
+    if (data.dueDate !== undefined) updateData.dueDate = data.dueDate
+    if (data.fundId !== undefined) updateData.fundId = data.fundId
+    if (data.description !== undefined) updateData.description = data.description
 
-  return prisma.billing.update({ where: { id }, data: updateData })
+    const billing = await tx.billing.update({
+      where: { id },
+      data: updateData,
+      include: {
+        fund: { select: { id: true, name: true } },
+        memberBillings: {
+          include: {
+            member: { select: { id: true, name: true, role: true } }
+          }
+        }
+      }
+    })
+
+    // If roles is provided, sync target members
+    if (data.roles !== undefined) {
+      // Find active members matching target roles
+      const activeMembersWhere: any = { status: 'AKTIF' }
+      if (data.roles.length > 0) {
+        activeMembersWhere.role = { in: data.roles }
+      }
+      const targetMembers = await tx.member.findMany({
+        where: activeMembersWhere,
+        select: { id: true, role: true }
+      })
+      const targetMemberIdSet = new Set(targetMembers.map(m => m.id))
+
+      // Current member billings
+      const existingMemberBillings = billing.memberBillings
+      const existingMemberIdSet = new Set(existingMemberBillings.map(mb => mb.memberId))
+
+      // 1. Members to remove: existing members not in targetMemberIdSet
+      // Only remove if status is NOT LUNAS (preserve paid history)
+      const toRemove = existingMemberBillings.filter(mb =>
+        !targetMemberIdSet.has(mb.memberId) && mb.status !== 'LUNAS'
+      )
+      if (toRemove.length > 0) {
+        const toRemoveIds = toRemove.map(mb => mb.id)
+        await tx.incomeTransaction.deleteMany({
+          where: { memberBillingId: { in: toRemoveIds } }
+        })
+        await tx.paymentRequest.deleteMany({
+          where: { memberBillingId: { in: toRemoveIds } }
+        })
+        await tx.memberBilling.deleteMany({
+          where: { id: { in: toRemoveIds } }
+        })
+      }
+
+      // 2. Members to add: target members not yet in existingMemberIdSet
+      const toAdd = targetMembers.filter(m => !existingMemberIdSet.has(m.id))
+      if (toAdd.length > 0) {
+        const finalDueDate = data.dueDate ?? billing.dueDate
+        await tx.memberBilling.createMany({
+          data: toAdd.map(m => ({
+            memberId: m.id,
+            billingId: id,
+            status: finalDueDate < new Date() ? 'MENUNGGAK' : 'BELUM_BAYAR'
+          }))
+        })
+      }
+    }
+
+    return billing
+  })
 }
 
 export async function deleteBilling(id: string) {

@@ -7,7 +7,9 @@ export async function createMember(data: CreateMemberInput) {
     data: {
       name: data.name,
       joinDate: data.joinDate,
-      status: data.status ?? 'AKTIF'
+      status: data.status ?? 'AKTIF',
+      role: data.role ?? 'ANGGOTA',
+      ...(data.monthlyFee !== undefined ? { monthlyFee: data.monthlyFee } : {})
     }
   })
 

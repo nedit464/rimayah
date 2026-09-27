@@ -35,7 +35,8 @@ export async function POST(request: Request) {
       parsed.data.dueDate,
       parsed.data.fundId,
       parsed.data.description,
-      parsed.data.memberIds
+      parsed.data.memberIds,
+      parsed.data.roles
     )
     return NextResponse.json(billing, { status: 201 })
   } catch (error) {
