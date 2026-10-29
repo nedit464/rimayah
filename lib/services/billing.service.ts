@@ -71,7 +71,8 @@ export async function createCustomBilling(
   fundId: string,
   description?: string,
   memberIds?: string[],
-  roles?: ('MUASSIS' | 'ANGGOTA')[]
+  roles?: ('MUASSIS' | 'ANGGOTA')[],
+  validUntil?: Date | null
 ) {
   return prisma.$transaction(async (tx) => {
     const billing = await tx.billing.create({
@@ -80,6 +81,7 @@ export async function createCustomBilling(
         type: 'CUSTOM',
         amount,
         dueDate,
+        validUntil: validUntil ?? null,
         fundId,
         description
       }
@@ -132,11 +134,14 @@ export async function getAllBillings() {
     }
   })
 
+  const now = new Date()
   return billings.map(b => {
     const roles = Array.from(new Set(b.memberBillings.map(mb => mb.member?.role).filter(Boolean)))
+    const isExpired = !!(b.validUntil && now > new Date(b.validUntil))
     return {
       ...b,
-      roles
+      roles,
+      isExpired
     }
   })
 }
@@ -159,11 +164,14 @@ export async function getMonthlyBillings() {
     }
   })
 
+  const now = new Date()
   return billings.map(b => {
     const roles = Array.from(new Set(b.memberBillings.map(mb => mb.member?.role).filter(Boolean)))
+    const isExpired = !!(b.validUntil && now > new Date(b.validUntil))
     return {
       ...b,
-      roles
+      roles,
+      isExpired
     }
   })
 }
@@ -186,11 +194,14 @@ export async function getCustomBillings() {
     }
   })
 
+  const now = new Date()
   return billings.map(b => {
     const roles = Array.from(new Set(b.memberBillings.map(mb => mb.member?.role).filter(Boolean)))
+    const isExpired = !!(b.validUntil && now > new Date(b.validUntil))
     return {
       ...b,
-      roles
+      roles,
+      isExpired
     }
   })
 }
@@ -200,7 +211,7 @@ export async function checkAndMarkOverdue() {
   await prisma.memberBilling.updateMany({
     where: {
       status: 'BELUM_BAYAR',
-      billing: { dueDate: { lt: now } }
+      billing: { dueDate: { lt: now }, OR: [{ validUntil: null }, { validUntil: { gte: now } }] }
     },
     data: { status: 'MENUNGGAK' }
   })
@@ -210,6 +221,7 @@ export async function updateBilling(id: string, data: {
   title?: string
   amount?: number
   dueDate?: Date
+  validUntil?: Date | null
   fundId?: string
   description?: string
   roles?: ('MUASSIS' | 'ANGGOTA')[]
@@ -219,6 +231,7 @@ export async function updateBilling(id: string, data: {
     if (data.title !== undefined) updateData.title = data.title
     if (data.amount !== undefined) updateData.amount = data.amount
     if (data.dueDate !== undefined) updateData.dueDate = data.dueDate
+    if (data.validUntil !== undefined) updateData.validUntil = data.validUntil
     if (data.fundId !== undefined) updateData.fundId = data.fundId
     if (data.description !== undefined) updateData.description = data.description
 

@@ -26,6 +26,7 @@ export async function GET(request: Request) {
           title: mb.billing.title,
           amount: mb.billing.amount,
           dueDate: mb.billing.dueDate,
+          validUntil: (mb.billing as any).validUntil ?? null,
           type: mb.billing.type
         }
       }))

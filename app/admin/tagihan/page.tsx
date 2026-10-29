@@ -27,6 +27,8 @@ interface Billing {
   type: 'MONTHLY_KAS' | 'CUSTOM'
   amount: number
   dueDate: string
+  validUntil?: string | null
+  isExpired?: boolean
   month: number | null
   year: number | null
   fund: { id: string; name: string }
@@ -56,6 +58,7 @@ export default function TagihanPage() {
     title: '',
     amount: '',
     dueDate: '',
+    validUntil: '',
     fundId: '',
     description: '',
     roles: [] as string[]
@@ -65,7 +68,7 @@ export default function TagihanPage() {
   const [error, setError] = useState('')
   // Edit / Delete
   const [editModalOpen, setEditModalOpen] = useState(false)
-  const [editForm, setEditForm] = useState<{ id: string; title: string; amount: string; dueDate: string; fundId: string; description?: string; roles: string[] } | null>(null)
+  const [editForm, setEditForm] = useState<{ id: string; title: string; amount: string; dueDate: string; validUntil?: string; fundId: string; description?: string; roles: string[] } | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const fetchData = async () => {
@@ -170,12 +173,13 @@ export default function TagihanPage() {
           ...customForm,
           amount: parseFloat(customForm.amount),
           dueDate: new Date(customForm.dueDate),
+          validUntil: customForm.validUntil ? new Date(customForm.validUntil) : null,
           roles: customForm.roles.length > 0 ? customForm.roles : undefined,
         }),
       })
       if (res.ok) {
         setCustomModalOpen(false)
-        setCustomForm({ title: '', amount: '', dueDate: '', fundId: '', description: '', roles: [] })
+        setCustomForm({ title: '', amount: '', dueDate: '', validUntil: '', fundId: '', description: '', roles: [] })
         fetchData()
       } else {
         const data = await res.json()
@@ -200,6 +204,7 @@ export default function TagihanPage() {
           title: editForm.title,
           amount: parseFloat(editForm.amount),
           dueDate: new Date(editForm.dueDate),
+          validUntil: editForm.validUntil ? new Date(editForm.validUntil) : null,
           fundId: editForm.fundId,
           description: editForm.description,
           roles: editForm.roles,
@@ -304,6 +309,7 @@ export default function TagihanPage() {
                     <th>Judul</th>
                     <th>Jumlah</th>
                     <th>Deadline</th>
+                    <th>Masa Aktif</th>
                     <th>Pos Dana</th>
                     <th>Bulan/Tahun</th>
                     <th>Target</th>
@@ -316,6 +322,21 @@ export default function TagihanPage() {
                       <td className="font-medium text-text-primary">{b.title}</td>
                       <td className="font-mono-num">{formatRupiah(Number(b.amount))}</td>
                       <td className="font-mono-num text-xs">{formatDateShort(b.dueDate)}</td>
+                      <td className="text-xs">
+                        {b.validUntil ? (
+                          b.isExpired || new Date() > new Date(b.validUntil) ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded font-medium bg-danger-muted text-danger border border-danger/20">
+                              Kadaluarsa ({formatDateShort(b.validUntil)})
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded font-medium bg-emerald-subtle text-emerald-bright border border-emerald-500/20">
+                              s/d {formatDateShort(b.validUntil)}
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-text-tertiary">Selamanya</span>
+                        )}
+                      </td>
                       <td>{b.fund.name}</td>
                       <td className="text-xs">
                         {b.month && b.year ? `${getMonthName(b.month)} ${b.year}` : '—'}
@@ -345,7 +366,16 @@ export default function TagihanPage() {
                           <button
                             onClick={() => {
                               setError('')
-                              setEditForm({ id: b.id, title: b.title, amount: String(b.amount), dueDate: b.dueDate.slice(0,10), fundId: b.fund?.id || '', description: '', roles: b.roles || [] })
+                              setEditForm({
+                                id: b.id,
+                                title: b.title,
+                                amount: String(b.amount),
+                                dueDate: b.dueDate.slice(0, 10),
+                                validUntil: b.validUntil ? b.validUntil.slice(0, 10) : '',
+                                fundId: b.fund?.id || '',
+                                description: '',
+                                roles: b.roles || []
+                              })
                               setEditModalOpen(true)
                             }}
                             className="btn btn-outline btn-sm"
@@ -512,6 +542,14 @@ export default function TagihanPage() {
                 </div>
 
                 <div>
+                  <label className="label">Masa Aktif Tagihan <span className="text-xs text-text-tertiary font-normal">(Opsional)</span></label>
+                  <input type="date" className="input" value={editForm.validUntil || ''} onChange={(e) => setEditForm({ ...editForm, validUntil: e.target.value })} />
+                  <p className="text-[11px] text-text-tertiary mt-1">
+                    Jika masa aktif ditentukan dan sudah lewat, anggota tidak lagi dibebani tagihan ini. Kosongkan jika tagihan berlaku selamanya.
+                  </p>
+                </div>
+
+                <div>
                   <label className="label">Pos Dana</label>
                   <select className="input text-sm" value={editForm.fundId} onChange={(e) => setEditForm({ ...editForm, fundId: e.target.value })}>
                     <option value="">Pilih Dana</option>
@@ -639,6 +677,19 @@ export default function TagihanPage() {
                       className="input"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="label">Masa Aktif Tagihan <span className="text-xs text-text-tertiary font-normal">(Opsional)</span></label>
+                  <input
+                    type="date"
+                    value={customForm.validUntil}
+                    onChange={(e) => setCustomForm({ ...customForm, validUntil: e.target.value })}
+                    className="input"
+                  />
+                  <p className="text-[11px] text-text-tertiary mt-1">
+                    Jika masa aktif ditentukan dan sudah lewat, anggota tidak lagi dibebani tagihan ini. Kosongkan jika tagihan berlaku selamanya.
+                  </p>
                 </div>
 
                 <div>

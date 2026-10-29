@@ -25,6 +25,7 @@ export interface MemberBillingWithBilling {
     dueDate: Date
     month: number | null
     year: number | null
+    validUntil?: Date | null
   }
 }
 

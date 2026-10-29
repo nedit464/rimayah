@@ -141,3 +141,130 @@ export async function getExpenses(filters?: {
     orderBy: { date: 'desc' }
   })
 }
+
+export async function recordIncome(
+  fundId: string,
+  title: string,
+  amount: number,
+  date: Date,
+  description?: string
+) {
+  return prisma.$transaction(async (tx) => {
+    const income = await tx.incomeTransaction.create({
+      data: {
+        fundId,
+        title,
+        amount,
+        date,
+        description,
+        memberBillingId: null
+      }
+    })
+
+    await tx.fund.update({
+      where: { id: fundId },
+      data: { balance: { increment: amount } }
+    })
+
+    return income
+  })
+}
+
+export async function deleteIncome(id: string) {
+  return prisma.$transaction(async (tx) => {
+    const income = await tx.incomeTransaction.findUnique({ where: { id } })
+    if (!income) throw new Error('Pemasukan tidak ditemukan')
+
+    if (income.memberBillingId !== null) {
+      throw new Error('Pemasukan dari tagihan anggota tidak dapat dihapus secara langsung. Kelola melalui menu Pembayaran.')
+    }
+
+    await tx.incomeTransaction.delete({ where: { id } })
+
+    // Deduct the amount from the fund
+    await tx.fund.update({
+      where: { id: income.fundId },
+      data: { balance: { decrement: income.amount } }
+    })
+
+    return income
+  })
+}
+
+export async function updateIncome(
+  id: string,
+  data: {
+    title?: string
+    amount?: number
+    date?: Date
+    description?: string
+    fundId?: string
+  }
+) {
+  return prisma.$transaction(async (tx) => {
+    const old = await tx.incomeTransaction.findUnique({ where: { id } })
+    if (!old) throw new Error('Pemasukan tidak ditemukan')
+
+    if (old.memberBillingId !== null) {
+      throw new Error('Pemasukan dari tagihan anggota tidak dapat diubah secara langsung.')
+    }
+
+    // Deduct old amount from old fund
+    await tx.fund.update({
+      where: { id: old.fundId },
+      data: { balance: { decrement: old.amount } }
+    })
+
+    const updated = await tx.incomeTransaction.update({
+      where: { id },
+      data: {
+        title: data.title,
+        amount: data.amount,
+        date: data.date,
+        description: data.description,
+        fundId: data.fundId
+      }
+    })
+
+    // Add new amount to new (or same) fund
+    await tx.fund.update({
+      where: { id: updated.fundId },
+      data: { balance: { increment: updated.amount } }
+    })
+
+    return updated
+  })
+}
+
+export async function getIncomes(filters?: {
+  fundId?: string
+  month?: number
+  year?: number
+  customOnly?: boolean
+}) {
+  const where: Record<string, unknown> = {}
+  if (filters?.fundId) where.fundId = filters.fundId
+  if (filters?.customOnly !== false) {
+    where.memberBillingId = null
+  }
+  if (filters?.month !== undefined && filters?.year !== undefined) {
+    const start = new Date(filters.year, filters.month - 1, 1)
+    const end = new Date(filters.year, filters.month, 0, 23, 59, 59)
+    where.date = { gte: start, lte: end }
+  }
+
+  return prisma.incomeTransaction.findMany({
+    where,
+    include: {
+      fund: { select: { id: true, name: true, color: true } },
+      memberBilling: {
+        select: {
+          id: true,
+          member: { select: { name: true } },
+          billing: { select: { title: true } }
+        }
+      }
+    },
+    orderBy: { date: 'desc' }
+  })
+}

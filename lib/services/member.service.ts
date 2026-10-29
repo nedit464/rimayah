@@ -1,47 +1,29 @@
 import { prisma } from '../db'
-import type { CreateMemberInput, UpdateMemberInput } from '../validations/member.schema'
 import type { MemberWithBillings, MemberPaymentSummary } from '@/types'
+import type { CreateMemberInput, UpdateMemberInput } from '../validations/member.schema'
 
 export async function createMember(data: CreateMemberInput) {
   const member = await prisma.member.create({
     data: {
       name: data.name,
       joinDate: data.joinDate,
-      status: data.status ?? 'AKTIF',
-      role: data.role ?? 'ANGGOTA',
-      ...(data.monthlyFee !== undefined ? { monthlyFee: data.monthlyFee } : {})
+      status: data.status,
+      role: data.role ?? 'ANGGOTA'
     }
   })
 
-  // Auto-assign active billings from joinDate onward
+  // Auto-generate current active billings for new member
   const billings = await prisma.billing.findMany({
-    where: {
-      isActive: true,
-      OR: [
-        {
-          type: 'MONTHLY_KAS',
-          year: { gte: data.joinDate.getFullYear() },
-        },
-        { type: 'CUSTOM' }
-      ]
-    }
+    where: { isActive: true }
   })
 
-  const applicableBillings = billings.filter(billing => {
-    if (billing.type === 'MONTHLY_KAS' && billing.month && billing.year) {
-      const billingDate = new Date(billing.year, billing.month - 1, 1)
-      const joinMonth = new Date(data.joinDate.getFullYear(), data.joinDate.getMonth(), 1)
-      return billingDate >= joinMonth
-    }
-    return true
-  })
-
-  if (applicableBillings.length > 0) {
+  if (billings.length > 0) {
+    const now = new Date()
     await prisma.memberBilling.createMany({
-      data: applicableBillings.map(billing => ({
+      data: billings.map(b => ({
         memberId: member.id,
-        billingId: billing.id,
-        status: billing.dueDate < new Date() ? 'MENUNGGAK' : 'BELUM_BAYAR'
+        billingId: b.id,
+        status: b.dueDate < now ? 'MENUNGGAK' : 'BELUM_BAYAR'
       }))
     })
   }
@@ -96,6 +78,7 @@ export async function searchMembersByName(query: string): Promise<MemberWithBill
               type: true,
               amount: true,
               dueDate: true,
+              validUntil: true,
               month: true,
               year: true
             }
@@ -107,7 +90,20 @@ export async function searchMembersByName(query: string): Promise<MemberWithBill
     take: 10
   })
 
-  return members as unknown as MemberWithBillings[]
+  const now = new Date()
+  const filtered = members.map(m => ({
+    ...m,
+    memberBillings: m.memberBillings.filter(mb => {
+      const isExpired = (mb.billing as any)?.validUntil && now > new Date((mb.billing as any).validUntil)
+      // If billing has expired and is unpaid, member is no longer burdened and it does not show on screen
+      if (isExpired && mb.status !== 'LUNAS') {
+        return false
+      }
+      return true
+    })
+  }))
+
+  return filtered as unknown as MemberWithBillings[]
 }
 
 export async function getMemberPaymentSummary(memberId: string): Promise<MemberPaymentSummary | null> {
@@ -122,12 +118,21 @@ export async function getMemberPaymentSummary(memberId: string): Promise<MemberP
 
   if (!member) return null
 
-  const totalBillings = member.memberBillings.length
-  const totalPaid = member.memberBillings.filter(mb => mb.status === 'LUNAS').length
-  const arrearsBillings = member.memberBillings.filter(mb => mb.status === 'MENUNGGAK' || mb.status === 'BELUM_BAYAR')
+  const now = new Date()
+  const activeBillings = member.memberBillings.filter(mb => {
+    const isExpired = mb.billing?.validUntil && now > new Date(mb.billing.validUntil)
+    if (isExpired && mb.status !== 'LUNAS') {
+      return false
+    }
+    return true
+  })
+
+  const totalBillings = activeBillings.length
+  const totalPaid = activeBillings.filter(mb => mb.status === 'LUNAS').length
+  const arrearsBillings = activeBillings.filter(mb => mb.status === 'MENUNGGAK' || mb.status === 'BELUM_BAYAR')
   const totalArrears = arrearsBillings.length
-  const totalAmount = member.memberBillings.reduce((sum, mb) => sum + mb.billing.amount.toNumber(), 0)
-  const totalPaidAmount = member.memberBillings
+  const totalAmount = activeBillings.reduce((sum, mb) => sum + mb.billing.amount.toNumber(), 0)
+  const totalPaidAmount = activeBillings
     .filter(mb => mb.status === 'LUNAS')
     .reduce((sum, mb) => sum + mb.billing.amount.toNumber(), 0)
 
