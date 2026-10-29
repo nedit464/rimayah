@@ -5,7 +5,9 @@ export const CreateMemberSchema = z.object({
   joinDate: z.coerce.date().min(new Date('2025-12-01'), {
     message: 'Tanggal bergabung minimal Desember 2025'
   }),
-  status: z.enum(['AKTIF', 'NONAKTIF']).default('AKTIF')
+  status: z.enum(['AKTIF', 'NONAKTIF']).default('AKTIF'),
+  role: z.enum(['MUASSIS', 'ANGGOTA']).default('ANGGOTA'),
+  monthlyFee: z.number().nonnegative().optional()
 })
 
 export const UpdateMemberSchema = z.object({
@@ -13,7 +15,9 @@ export const UpdateMemberSchema = z.object({
   joinDate: z.coerce.date().min(new Date('2025-12-01'), {
     message: 'Tanggal bergabung minimal Desember 2025'
   }).optional(),
-  status: z.enum(['AKTIF', 'NONAKTIF']).optional()
+  status: z.enum(['AKTIF', 'NONAKTIF']).optional(),
+  role: z.enum(['MUASSIS', 'ANGGOTA']).optional(),
+  monthlyFee: z.number().nonnegative().optional()
 })
 
 export type CreateMemberInput = z.infer<typeof CreateMemberSchema>

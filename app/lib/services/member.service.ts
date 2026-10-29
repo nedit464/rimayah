@@ -7,7 +7,9 @@ export async function createMember(data: CreateMemberInput) {
     data: {
       name: data.name,
       joinDate: data.joinDate,
-      status: data.status ?? 'AKTIF'
+      status: data.status ?? 'AKTIF',
+      role: data.role ?? 'ANGGOTA',
+      ...(data.monthlyFee !== undefined ? { monthlyFee: data.monthlyFee } : {})
     }
   })
 
@@ -94,6 +96,7 @@ export async function searchMembersByName(query: string): Promise<MemberWithBill
               type: true,
               amount: true,
               dueDate: true,
+              validUntil: true,
               month: true,
               year: true
             }
@@ -105,7 +108,20 @@ export async function searchMembersByName(query: string): Promise<MemberWithBill
     take: 10
   })
 
-  return members as unknown as MemberWithBillings[]
+  const now = new Date()
+  const filtered = members.map(m => ({
+    ...m,
+    memberBillings: m.memberBillings.filter(mb => {
+      const isExpired = mb.billing?.validUntil && now > new Date(mb.billing.validUntil)
+      // If billing has expired and is unpaid, member is no longer burdened and it does not show on screen
+      if (isExpired && mb.status !== 'LUNAS') {
+        return false
+      }
+      return true
+    })
+  }))
+
+  return filtered as unknown as MemberWithBillings[]
 }
 
 export async function getMemberPaymentSummary(memberId: string): Promise<MemberPaymentSummary | null> {
@@ -120,12 +136,21 @@ export async function getMemberPaymentSummary(memberId: string): Promise<MemberP
 
   if (!member) return null
 
-  const totalBillings = member.memberBillings.length
-  const totalPaid = member.memberBillings.filter(mb => mb.status === 'LUNAS').length
-  const arrearsBillings = member.memberBillings.filter(mb => mb.status === 'MENUNGGAK' || mb.status === 'BELUM_BAYAR')
+  const now = new Date()
+  const activeBillings = member.memberBillings.filter(mb => {
+    const isExpired = mb.billing?.validUntil && now > new Date(mb.billing.validUntil)
+    if (isExpired && mb.status !== 'LUNAS') {
+      return false
+    }
+    return true
+  })
+
+  const totalBillings = activeBillings.length
+  const totalPaid = activeBillings.filter(mb => mb.status === 'LUNAS').length
+  const arrearsBillings = activeBillings.filter(mb => mb.status === 'MENUNGGAK' || mb.status === 'BELUM_BAYAR')
   const totalArrears = arrearsBillings.length
-  const totalAmount = member.memberBillings.reduce((sum, mb) => sum + mb.billing.amount.toNumber(), 0)
-  const totalPaidAmount = member.memberBillings
+  const totalAmount = activeBillings.reduce((sum, mb) => sum + mb.billing.amount.toNumber(), 0)
+  const totalPaidAmount = activeBillings
     .filter(mb => mb.status === 'LUNAS')
     .reduce((sum, mb) => sum + mb.billing.amount.toNumber(), 0)
 

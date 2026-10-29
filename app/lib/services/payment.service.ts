@@ -23,7 +23,8 @@ export async function verifyPayment(memberBillingId: string) {
       where: { id: memberBillingId },
       include: {
         billing: true,
-        member: true
+        member: true,
+        incomeTransaction: true
       }
     })
 
@@ -39,16 +40,28 @@ export async function verifyPayment(memberBillingId: string) {
       }
     })
 
-    // Create income transaction
-    await tx.incomeTransaction.create({
-      data: {
-        fundId: mb.billing.fundId,
-        memberBillingId: mb.id,
-        title: `Pembayaran ${mb.billing.title} - ${mb.member.name}`,
-        amount: mb.billing.amount,
-        date: new Date()
-      }
-    })
+    // Upsert income transaction to handle re-verification after cancellation
+    if (mb.incomeTransaction) {
+      await tx.incomeTransaction.update({
+        where: { id: mb.incomeTransaction.id },
+        data: {
+          fundId: mb.billing.fundId,
+          title: `Pembayaran ${mb.billing.title} - ${mb.member.name}`,
+          amount: mb.billing.amount,
+          date: new Date()
+        }
+      })
+    } else {
+      await tx.incomeTransaction.create({
+        data: {
+          fundId: mb.billing.fundId,
+          memberBillingId: mb.id,
+          title: `Pembayaran ${mb.billing.title} - ${mb.member.name}`,
+          amount: mb.billing.amount,
+          date: new Date()
+        }
+      })
+    }
 
     // Update fund balance
     await tx.fund.update({
@@ -61,21 +74,43 @@ export async function verifyPayment(memberBillingId: string) {
 }
 
 export async function rejectPayment(memberBillingId: string) {
-  const mb = await prisma.memberBilling.findUnique({
-    where: { id: memberBillingId },
-    include: { billing: true }
-  })
+  return prisma.$transaction(async (tx) => {
+    const mb = await tx.memberBilling.findUnique({
+      where: { id: memberBillingId },
+      include: {
+        billing: true,
+        incomeTransaction: true
+      }
+    })
 
-  if (!mb) throw new Error('Data tagihan tidak ditemukan')
+    if (!mb) throw new Error('Data tagihan tidak ditemukan')
 
-  const newStatus = mb.billing.dueDate < new Date() ? 'MENUNGGAK' : 'BELUM_BAYAR'
+    // If payment was previously LUNAS, remove income transaction and decrement fund balance
+    if (mb.status === 'LUNAS') {
+      if (mb.incomeTransaction) {
+        await tx.incomeTransaction.delete({
+          where: { id: mb.incomeTransaction.id }
+        })
 
-  return prisma.memberBilling.update({
-    where: { id: memberBillingId },
-    data: {
-      status: newStatus as 'BELUM_BAYAR' | 'MENUNGGAK',
-      paidAt: null
+        await tx.fund.update({
+          where: { id: mb.billing.fundId },
+          data: {
+            balance: { decrement: mb.incomeTransaction.amount }
+          }
+        })
+      }
     }
+
+    const newStatus = mb.billing.dueDate < new Date() ? 'MENUNGGAK' : 'BELUM_BAYAR'
+
+    return tx.memberBilling.update({
+      where: { id: memberBillingId },
+      data: {
+        status: newStatus as 'BELUM_BAYAR' | 'MENUNGGAK',
+        paidAt: null,
+        verifiedAt: null
+      }
+    })
   })
 }
 

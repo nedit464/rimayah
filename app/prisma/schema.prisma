@@ -94,6 +94,7 @@ model Billing {
   fundId      String
   description String?
   isActive    Boolean     @default(true)
+  validUntil  DateTime?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 

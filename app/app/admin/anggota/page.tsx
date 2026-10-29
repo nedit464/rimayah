@@ -18,6 +18,7 @@ interface Member {
   name: string
   joinDate: string
   status: 'AKTIF' | 'NONAKTIF'
+  role: 'MUASSIS' | 'ANGGOTA'
   memberBillings: { status: string }[]
 }
 
@@ -26,10 +27,11 @@ export default function AnggotaPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'AKTIF' | 'NONAKTIF'>('ALL')
+  const [roleFilter, setRoleFilter] = useState<'ALL' | 'MUASSIS' | 'ANGGOTA'>('ALL')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingMember, setEditingMember] = useState<Member | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [formData, setFormData] = useState({ name: '', joinDate: '', status: 'AKTIF' })
+  const [formData, setFormData] = useState({ name: '', joinDate: '', status: 'AKTIF', role: 'ANGGOTA' })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const debouncedSearch = useDebounce(search, 300)
@@ -58,19 +60,20 @@ export default function AnggotaPage() {
   const filtered = members.filter(m => {
     const matchSearch = m.name.toLowerCase().includes(debouncedSearch.toLowerCase())
     const matchStatus = statusFilter === 'ALL' || m.status === statusFilter
-    return matchSearch && matchStatus
+    const matchRole = roleFilter === 'ALL' || m.role === roleFilter
+    return matchSearch && matchStatus && matchRole
   })
 
   const openAdd = () => {
     setEditingMember(null)
-    setFormData({ name: '', joinDate: '', status: 'AKTIF' })
+    setFormData({ name: '', joinDate: '', status: 'AKTIF', role: 'ANGGOTA' })
     setFormError('')
     setModalOpen(true)
   }
 
   const openEdit = (m: Member) => {
     setEditingMember(m)
-    setFormData({ name: m.name, joinDate: m.joinDate.split('T')[0], status: m.status })
+    setFormData({ name: m.name, joinDate: m.joinDate.split('T')[0], status: m.status, role: m.role })
     setFormError('')
     setModalOpen(true)
   }
@@ -129,6 +132,15 @@ export default function AnggotaPage() {
               <option value="AKTIF">Aktif</option>
               <option value="NONAKTIF">Nonaktif</option>
             </select>
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value as 'ALL' | 'MUASSIS' | 'ANGGOTA')}
+              className="input w-full sm:w-auto text-sm"
+            >
+              <option value="ALL">Semua Role</option>
+              <option value="MUASSIS">Muassis</option>
+              <option value="ANGGOTA">Anggota</option>
+            </select>
           </div>
           <button onClick={openAdd} className="btn btn-primary w-full sm:w-auto">
             <Plus className="w-4 h-4" /> Tambah Anggota
@@ -147,6 +159,7 @@ export default function AnggotaPage() {
                     <th>#</th>
                     <th>Nama</th>
                     <th>Tanggal Bergabung</th>
+                    <th>Role</th>
                     <th>Status</th>
                     <th>Tagihan</th>
                     <th>Lunas</th>
@@ -162,6 +175,15 @@ export default function AnggotaPage() {
                         <td className="font-mono-num text-xs text-text-tertiary">{i + 1}</td>
                         <td className="font-medium text-text-primary">{m.name}</td>
                         <td className="font-mono-num text-xs">{formatDate(m.joinDate)}</td>
+                        <td>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                            m.role === 'MUASSIS'
+                              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                              : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                          }`}>
+                            {m.role === 'MUASSIS' ? 'Muassis' : 'Anggota'}
+                          </span>
+                        </td>
                         <td><StatusBadge status={m.status} /></td>
                         <td className="font-mono-num">{totalBills}</td>
                         <td className="font-mono-num">{paidBills}/{totalBills}</td>
@@ -213,12 +235,21 @@ export default function AnggotaPage() {
                   <label className="label">Tanggal Bergabung</label>
                   <input type="date" value={formData.joinDate} onChange={(e) => setFormData({...formData, joinDate: e.target.value})} className="input" min="2025-12-01" />
                 </div>
-                <div>
-                  <label className="label">Status</label>
-                  <select value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})} className="input">
-                    <option value="AKTIF">Aktif</option>
-                    <option value="NONAKTIF">Nonaktif</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">Status</label>
+                    <select value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})} className="input">
+                      <option value="AKTIF">Aktif</option>
+                      <option value="NONAKTIF">Nonaktif</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Role</label>
+                    <select value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})} className="input">
+                      <option value="ANGGOTA">Anggota</option>
+                      <option value="MUASSIS">Muassis</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 

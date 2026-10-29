@@ -5,6 +5,7 @@ export interface MemberWithBillings {
   name: string
   joinDate: Date
   status: 'AKTIF' | 'NONAKTIF'
+  role: 'MUASSIS' | 'ANGGOTA'
   memberBillings: MemberBillingWithBilling[]
 }
 
@@ -24,6 +25,7 @@ export interface MemberBillingWithBilling {
     dueDate: Date
     month: number | null
     year: number | null
+    validUntil?: Date | null
   }
 }
 
