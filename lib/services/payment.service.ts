@@ -116,7 +116,7 @@ export async function rejectPayment(memberBillingId: string) {
   })
 }
 
-export async function getPendingPayments() {
+export async function getPendingVerifications() {
   return prisma.memberBilling.findMany({
     where: { status: 'MENUNGGU_VERIFIKASI' },
     include: {
@@ -129,16 +129,27 @@ export async function getPendingPayments() {
   })
 }
 
-export async function getPaymentHistory() {
+export async function getAllPayments(filters?: {
+  status?: string
+  month?: number
+  year?: number
+  search?: string
+}) {
   return prisma.memberBilling.findMany({
-    where: { status: 'LUNAS' },
+    where: {
+      ...(filters?.status ? { status: filters.status as 'BELUM_BAYAR' | 'MENUNGGU_VERIFIKASI' | 'MENUNGGAK' | 'LUNAS' } : {}),
+      ...(filters?.search ? { member: { name: { contains: filters.search, mode: 'insensitive' as const } } } : {}),
+      ...(filters?.month && filters?.year ? { billing: { month: filters.month, year: filters.year } } : {})
+    },
     include: {
       member: true,
       billing: {
         include: { fund: true }
       }
     },
-    orderBy: { verifiedAt: 'desc' },
-    take: 50
+    orderBy: { updatedAt: 'desc' }
   })
 }
+
+export const getPendingPayments = getPendingVerifications
+export const getPaymentHistory = getAllPayments
