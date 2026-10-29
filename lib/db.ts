@@ -1,5 +1,6 @@
 import dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
+dotenv.config({ path: '.env' })
 
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
@@ -10,28 +11,47 @@ const globalForPrisma = globalThis as unknown as {
   pool: Pool | undefined
 }
 
-// Bypass cache and force recreate pool and prisma client
-// to ensure Next.js uses the latest DATABASE_URL from .env.local
 const connectionString = process.env.DATABASE_URL || "postgresql://postgres:password@127.0.0.1:5432/saad_furusiyah"
 
-if (globalForPrisma.pool) {
-  // Try to end the old pool gracefully
-  try {
-    globalForPrisma.pool.end().catch(() => {})
-  } catch(e) {}
-}
-
-const pool = new Pool({
+const pool = globalForPrisma.pool ?? new Pool({
   connectionString,
   connectionTimeoutMillis: 5000,
   idleTimeoutMillis: 300000,
 })
 
 const adapter = new PrismaPg(pool)
-const prisma = new PrismaClient({ adapter })
+const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter })
 
-globalForPrisma.pool = pool
-globalForPrisma.prisma = prisma
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.pool = pool
+  globalForPrisma.prisma = prisma
+}
 
-export { prisma }
+let schemaEnsured = false
+let schemaPromise: Promise<void> | null = null
+
+export async function ensureDbSchema() {
+  if (schemaEnsured) return
+  if (schemaPromise) return schemaPromise
+
+  schemaPromise = (async () => {
+    try {
+      await pool.query(`
+        ALTER TABLE "Billing" ADD COLUMN IF NOT EXISTS "validUntil" TIMESTAMP(3);
+      `)
+      schemaEnsured = true
+    } catch (err: any) {
+      console.warn('Auto-migration warning in ensureDbSchema:', err?.message)
+    } finally {
+      schemaPromise = null
+    }
+  })()
+
+  return schemaPromise
+}
+
+// Trigger initial migration immediately on module load
+ensureDbSchema().catch(() => {})
+
+export { prisma, pool }
 export { globalForPrisma }

@@ -1,4 +1,4 @@
-import { prisma } from '../db'
+import { prisma, ensureDbSchema } from '../db'
 import { MONTHLY_KAS_AMOUNT, DEFAULT_DUE_DAY } from '../constants'
 import { getMonthName } from '../utils'
 
@@ -118,6 +118,7 @@ export async function createCustomBilling(
 }
 
 export async function getAllBillings() {
+  await ensureDbSchema()
   const billings = await prisma.billing.findMany({
     orderBy: { createdAt: 'desc' },
     include: {

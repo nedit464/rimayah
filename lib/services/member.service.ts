@@ -1,8 +1,9 @@
-import { prisma } from '../db'
+import { prisma, ensureDbSchema } from '../db'
 import type { MemberWithBillings, MemberPaymentSummary } from '@/types'
 import type { CreateMemberInput, UpdateMemberInput } from '../validations/member.schema'
 
 export async function createMember(data: CreateMemberInput) {
+  await ensureDbSchema()
   const member = await prisma.member.create({
     data: {
       name: data.name,
@@ -40,6 +41,7 @@ export async function deleteMember(id: string) {
 }
 
 export async function getAllMembers() {
+  await ensureDbSchema()
   return prisma.member.findMany({
     orderBy: { name: 'asc' },
     include: {
@@ -52,6 +54,7 @@ export async function getAllMembers() {
 }
 
 export async function getMemberById(id: string) {
+  await ensureDbSchema()
   return prisma.member.findUnique({
     where: { id },
     include: {
@@ -64,6 +67,7 @@ export async function getMemberById(id: string) {
 }
 
 export async function searchMembersByName(query: string): Promise<MemberWithBillings[]> {
+  await ensureDbSchema()
   const members = await prisma.member.findMany({
     where: {
       name: { contains: query, mode: 'insensitive' }
